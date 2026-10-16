@@ -1,0 +1,14 @@
+[package]
+name = "simblocks"
+description = "SimCraft block library: sources, sinks, math, continuous, discrete and routing blocks."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+simcore = { path = "../simcore" }
+matplot = { path = "../../../matcraft/crates/matplot" }
+

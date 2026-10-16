@@ -1,0 +1,11 @@
+[package]
+name = "simcore"
+description = "SimCraft simulation kernel: typed model graph, scheduler and fixed-step solvers."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]

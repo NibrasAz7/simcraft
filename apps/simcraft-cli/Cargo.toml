@@ -1,0 +1,18 @@
+[package]
+name = "simcraft-cli"
+description = "SimCraft command line: run .simcraft models headless, export scope traces."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+simcore = { path = "../../crates/simcore" }
+simmodel = { path = "../../crates/simmodel" }
+simblocks = { path = "../../crates/simblocks" }
+
+[[bin]]
+name = "simcraft"
+path = "src/main.rs"

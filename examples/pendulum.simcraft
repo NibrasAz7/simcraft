@@ -1,0 +1,20 @@
+{
+  "format": "simcraft",
+  "version": 1,
+  "comment": "Linearized pendulum: theta'' = -(g/L)*theta, g/L = 9.81. Expected: theta(t) = theta0*cos(sqrt(9.81)*t), period ~2.0 s.",
+  "solver": {"solver": "rk4", "dt": 0.001, "tstop": 10.0},
+  "blocks": [
+    {"path": "theta_dot", "type": "integrator", "params": {"x0": 0.0}},
+    {"path": "theta", "type": "integrator", "params": {"x0": 0.2}},
+    {"path": "gl", "type": "gain", "params": {"gain": -9.81}},
+    {"path": "angle_scope", "type": "scope"},
+    {"path": "save_theta", "type": "to_workspace", "params": {"var": "theta"}}
+  ],
+  "wires": [
+    {"from": "theta/1", "to": "gl/1"},
+    {"from": "gl/1", "to": "theta_dot/1"},
+    {"from": "theta_dot/1", "to": "theta/1"},
+    {"from": "theta/1", "to": "angle_scope/1"},
+    {"from": "theta/1", "to": "save_theta/1"}
+  ]
+}
