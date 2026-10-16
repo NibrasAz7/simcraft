@@ -1,0 +1,17 @@
+[package]
+name = "simcraft_engine"
+description = "SimCraft engine: every user-visible behaviour is a command."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+simcore = { path = "../simcore" }
+simblocks = { path = "../simblocks" }
+simmodel = { path = "../simmodel" }
+matcore = { path = "../../../matcraft/crates/matcore" }
+matlang = { path = "../../../matcraft/crates/matlang" }
+serde_json = "1"

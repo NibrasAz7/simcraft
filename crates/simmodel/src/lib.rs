@@ -156,6 +156,37 @@ impl Document {
     pub fn to_sim(&self, factory: &dyn BlockFactory) -> Result<Sim, SimError> {
         Sim::new(self.to_model(factory)?, self.solver)
     }
+
+    /// Block records in file order: `(path, type, params)` — the engine's
+    /// `model.list`/`block.get` read the document through this.
+    pub fn blocks(&self) -> Vec<(&str, &str, &Params)> {
+        self.blocks.iter().map(|b| (b.path.as_str(), b.type_name.as_str(), &b.params)).collect()
+    }
+
+    /// One block's `(type, params)`; `None` when no block lives at `path`.
+    pub fn block(&self, path: &str) -> Option<(&str, &Params)> {
+        self.blocks.iter().find(|b| b.path == path).map(|b| (b.type_name.as_str(), &b.params))
+    }
+
+    /// Wire endpoints in file order: `(from "path/port", to "path/port")`
+    /// with the document's 1-based port numbers.
+    pub fn wires(&self) -> Vec<(&str, &str)> {
+        self.wires.iter().map(|w| (w.src.as_str(), w.dst.as_str())).collect()
+    }
+
+    /// Merge `params` into block `path`'s parameter map (`block.set`). The
+    /// model must be rebuilt ([`Document::to_model`]) before a run sees them.
+    pub fn set_block_params(&mut self, path: &str, params: &Params) -> Result<(), SimError> {
+        match self.blocks.iter_mut().find(|b| b.path == path) {
+            Some(b) => {
+                for (k, v) in params {
+                    b.params.insert(k.clone(), v.clone());
+                }
+                Ok(())
+            }
+            None => Err(msg(format!("no block `{path}`"))),
+        }
+    }
 }
 
 #[cfg(test)]

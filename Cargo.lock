@@ -212,6 +212,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
+name = "matcore"
+version = "0.1.0"
+
+[[package]]
+name = "matlang"
+version = "0.1.0"
+dependencies = [
+ "flate2",
+ "matcore",
+ "matplot",
+]
+
+[[package]]
 name = "matplot"
 version = "0.1.0"
 dependencies = [
@@ -428,6 +441,18 @@ version = "0.1.0"
 name = "simcraft-cli"
 version = "0.1.0"
 dependencies = [
+ "simblocks",
+ "simcore",
+ "simmodel",
+]
+
+[[package]]
+name = "simcraft_engine"
+version = "0.1.0"
+dependencies = [
+ "matcore",
+ "matlang",
+ "serde_json",
  "simblocks",
  "simcore",
  "simmodel",
