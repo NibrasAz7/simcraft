@@ -4,9 +4,9 @@
   "comment": "Linearized pendulum: theta'' = -(g/L)*theta, g/L = 9.81. Expected: theta(t) = theta0*cos(sqrt(9.81)*t), period ~2.0 s.",
   "solver": {"solver": "rk4", "dt": 0.001, "tstop": 10.0},
   "blocks": [
-    {"path": "theta_dot", "type": "integrator", "params": {"x0": 0.0}},
     {"path": "theta", "type": "integrator", "params": {"x0": 0.2}},
     {"path": "gl", "type": "gain", "params": {"gain": -9.81}},
+    {"path": "theta_dot", "type": "integrator", "params": {"x0": 0.0}},
     {"path": "angle_scope", "type": "scope"},
     {"path": "save_theta", "type": "to_workspace", "params": {"var": "theta"}}
   ],
@@ -16,5 +16,12 @@
     {"from": "theta_dot/1", "to": "theta/1"},
     {"from": "theta/1", "to": "angle_scope/1"},
     {"from": "theta/1", "to": "save_theta/1"}
-  ]
+  ],
+  "layout": {
+    "theta": [140, 140],
+    "gl": [340, 140],
+    "theta_dot": [540, 140],
+    "angle_scope": [340, 300],
+    "save_theta": [540, 300]
+  }
 }

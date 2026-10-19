@@ -1,0 +1,27 @@
+[package]
+name = "simcraft-studio"
+description = "SimCraft Studio: block-diagram editor and runner (egui)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+name = "simcraft_studio"
+path = "src/lib.rs"
+
+[[bin]]
+name = "simcraft-studio"
+path = "src/main.rs"
+
+[dependencies]
+simcore = { path = "../../crates/simcore" }
+simblocks = { path = "../../crates/simblocks" }
+simmodel = { path = "../../crates/simmodel" }
+simcraft_engine = { path = "../../crates/engine" }
+egui = "0.36"
+eframe = "0.36"
+serde_json = "1"
+rfd = "0.17"
