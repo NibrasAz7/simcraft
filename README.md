@@ -5,13 +5,17 @@ simulation environment — the Simulink-class member of the ArtCraft family, and
 MatCraft's closest sibling. It runs natively on Windows, macOS and Linux, and on
 the web via WASM.
 
-Status: **S1 done** — the headless kernel works: `simcore` (typed graph,
-compile-time signal propagation, algebraic-loop detection, euler/rk4
-solvers), `simblocks` (20 blocks: sources, sinks, math, continuous,
-discrete, routing), `simmodel` (`.simcraft` JSON), and `simcraft-cli`
-(`run`/`check`/`blocks`). `cargo run -p simcraft-cli -- run
-examples/pendulum.simcraft` simulates a linearized pendulum. Not yet:
-Studio GUI, MatCraft `sim()` bridge, variable-step solvers, subsystems.
+Status: **S1–S3 working, S4 started** — `simcore` (typed graph,
+compile-time signal propagation, algebraic-loop detection, `euler`/`rk4`
+fixed-step + adaptive `rk45` Dormand–Prince solver), `simblocks` (25
+blocks: sources, sinks, math, logic, continuous, discrete, routing),
+`simmodel` (`.simcraft` JSON), `simcraft_engine` (command session +
+MatCraft bridge: `model.*`, `block.*`, `sim.run`/`sim.step`, to-workspace
+publish), `simcraft-cli` (`run`/`check`/`blocks` + solver overrides) and
+Studio (egui palette/canvas/inspector, run + trace chart). `cargo run -p
+simcraft-cli -- run examples/pendulum.simcraft` simulates a linearized
+pendulum. Not yet: multirate/zero-crossing rigor, subsystems, M-function
+blocks, WASM.
 MatCraft (`../matcraft`) is the reference implementation for every shared
 convention below.
 
@@ -115,9 +119,13 @@ apps/simcraft-cli   headless run/export: simcraft-cli sim model.simcraft
   (flagged, like Simulink's algebraic-loop diagnostic).
 - **States**: continuous states extracted to a flat `x` vector owned by the
   solver; discrete states per-block with their own sample times.
-- **Solvers** (staged): `euler`, `rk4` (fixed); `rk45` Dormand–Prince with
-  rtol/atol error control; later `ode15s`-style BDF for stiff systems,
-  discrete-only fast path.
+- **Solvers**: `euler`, `rk4` (fixed-step); `rk45` adaptive Dormand–Prince
+  5(4) with `rtol`/`atol` error control, `min_step`/`max_step` bounds, and
+  accepted/rejected step stats (`sim.run` reports both). `dt` is the
+  fixed step for `euler`/`rk4` and the initial step for `rk45`; all of it
+  lives in the `.simcraft` `solver` block and is overridable per
+  `sim.run`. Later: `ode15s`-style BDF for stiff systems, discrete-only
+  fast path.
 - **Scheduling**: multirate — each discrete block declares `Ts`; the scheduler
   fires updates on sample hits; zero-crossing detection brackets events and
   locates them by bisection/secant.
@@ -135,15 +143,18 @@ ports, width/rate mismatches.
 
 ### The block library (staged)
 
-M0 core (~20): step, ramp, sine, constant, clock, from-workspace, random ·
-scope, to-workspace, display · gain, sum, product, abs, sign, math-fcn,
-integrator, derivative, transfer-fcn, state-space · mux, demux · unit-delay,
-zero-order-hold, discrete-filter · saturation.
+Current (~25): step, ramp, sine, constant, clock · scope, to-workspace ·
+gain, sum, product (`*`/`/` per port), abs, saturation, dead-zone, switch ·
+relational (`== ~= < <= > >=`), logical-operator (`and or xor nand nor
+not`) · integrator, derivative, transfer-fcn, PID (parallel form with
+derivative filter), transport-delay · unit-delay, zero-order-hold · mux,
+demux.
 
-Later: nonlinear (dead zone, relay, quantizer, lookup), logic/compare,
-switch/manual-switch, subsystems + enabled/triggered ports, bus creator,
-M-function block, PID, second-order integrator, transport delay, rate
-transition, hit-crossing, S-function API (Rust `dyn Block` + M-code blocks).
+Later: from-workspace, random, display, sign, math-fcn, state-space,
+discrete-filter, relay, quantizer, lookup, manual-switch, subsystems +
+enabled/triggered ports, bus creator, M-function block, second-order
+integrator, rate transition, hit-crossing, S-function API (Rust `dyn
+Block` + M-code blocks).
 
 ### Studio UI
 

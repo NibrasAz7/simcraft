@@ -76,13 +76,18 @@ fn no_model() -> SimError {
     SimError::Msg("no model loaded — `model.load` a `.simcraft` file first".into())
 }
 
-/// Solver overrides accepted by `sim.run` (`{solver?, dt?, tstop?}`); unset
+/// Solver overrides accepted by `sim.run`/`sim.step`
+/// (`{solver?, dt?, tstop?, rtol?, atol?, min_step?, max_step?}`); unset
 /// fields fall back to the document's `solver` block.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct RunOpts {
     pub solver: Option<Solver>,
     pub dt: Option<f64>,
     pub tstop: Option<f64>,
+    pub rtol: Option<f64>,
+    pub atol: Option<f64>,
+    pub min_step: Option<f64>,
+    pub max_step: Option<f64>,
 }
 
 /// One sink trace lifted out of a finished run.
@@ -100,11 +105,30 @@ pub struct SimRun {
     pub t: Vec<f64>,
     /// Final flat continuous state.
     pub x: Vec<f64>,
+    /// Accepted major steps.
     pub steps: u64,
+    /// Rejected trial steps (`rk45`).
+    pub rejected: u64,
     pub solver: Solver,
     pub dt: f64,
     pub tstop: f64,
     pub traces: Vec<NamedTrace>,
+}
+
+/// What a `sim.step` hands back: where the stepping sim currently sits.
+pub struct StepInfo {
+    /// Simulation time after the last executed major step.
+    pub t: f64,
+    /// Major steps executed by this call.
+    pub steps_done: u64,
+    /// Total accepted steps since the stepping sim was created.
+    pub accepted: u64,
+    /// Total rejected trial steps (`rk45`).
+    pub rejected: u64,
+    /// True once `tstop` has been reached and logged.
+    pub finished: bool,
+    /// Final flat continuous state (current `x`).
+    pub x: Vec<f64>,
 }
 
 /// `model.check` results — the model compiled and the solver grid is valid.
@@ -121,8 +145,12 @@ pub struct CheckInfo {
 pub struct Session {
     doc: Option<Document>,
     /// Built from `doc`; kept so `model.list`/`block.*` stay cheap and so
-    /// `sim.run` can run more than once.
+    /// `sim.run` can run more than once. `None` while a stepping sim owns
+    /// the model (`sim.step`).
     model: Option<Model>,
+    /// Live stepping sim created by `sim.step` — owns the model until a
+    /// `sim.run`/`block.set`/`model.load` discards it.
+    sim: Option<Sim>,
     /// Linked MatCraft session — the model's compute context. `None` until
     /// [`Session::link`] (hosts that already own a matlang session publish
     /// traces into it directly via [`publish`] instead).
@@ -131,7 +159,7 @@ pub struct Session {
 
 impl Session {
     pub fn new() -> Self {
-        Session { doc: None, model: None, mat: None }
+        Session { doc: None, model: None, sim: None, mat: None }
     }
 
     /// Attach a MatCraft session as this model's workspace (`session.link`).
@@ -149,9 +177,10 @@ impl Session {
         self.mat.as_ref()
     }
 
-    /// True when a model is loaded (`model.load` succeeded).
+    /// True when a model is loaded (`model.load` succeeded or a stepping
+    /// sim is live).
     pub fn loaded(&self) -> bool {
-        self.model.is_some()
+        self.model.is_some() || self.sim.is_some()
     }
 
     /// The loaded document (for `model.list`/`block.get`).
@@ -171,6 +200,7 @@ impl Session {
         let n = model.len();
         self.doc = Some(doc);
         self.model = Some(model);
+        self.sim = None;
         Ok(n)
     }
 
@@ -180,10 +210,41 @@ impl Session {
         match &self.doc {
             Some(doc) => {
                 self.model = Some(doc.to_model(&simblocks::Factory)?);
+                self.sim = None;
                 Ok(())
             }
             None => Err(no_model()),
         }
+    }
+
+    /// Document solver config with `ov` overrides applied.
+    fn merged_cfg(&self, ov: &RunOpts) -> Result<SimConfig, SimError> {
+        let mut cfg = match &self.doc {
+            Some(d) => d.solver,
+            None => return Err(no_model()),
+        };
+        if let Some(s) = ov.solver {
+            cfg.solver = s;
+        }
+        if let Some(dt) = ov.dt {
+            cfg.dt = dt;
+        }
+        if let Some(t) = ov.tstop {
+            cfg.tstop = t;
+        }
+        if let Some(r) = ov.rtol {
+            cfg.rtol = r;
+        }
+        if let Some(a) = ov.atol {
+            cfg.atol = a;
+        }
+        if let Some(h) = ov.min_step {
+            cfg.min_step = h;
+        }
+        if let Some(h) = ov.max_step {
+            cfg.max_step = h;
+        }
+        Ok(cfg)
     }
 
     /// `block.set`: merge `params` into a block's parameter map, then rebuild
@@ -213,21 +274,13 @@ impl Session {
     /// `sim.run`: run the loaded model over `[0, tstop]`, collect every
     /// Scope/ToWorkspace trace and publish them into the linked MatCraft
     /// session when one is attached. The model is kept afterwards (states
-    /// reset on the next run — `compile` re-reads `x0`).
+    /// reset on the next run — `compile` re-reads `x0`). A live stepping
+    /// sim (`sim.step`) is discarded first — `sim.run` always runs fresh.
     pub fn run(&mut self, ov: &RunOpts) -> Result<SimRun, SimError> {
-        let mut cfg = match &self.doc {
-            Some(d) => d.solver,
-            None => return Err(no_model()),
-        };
-        if let Some(s) = ov.solver {
-            cfg.solver = s;
+        if self.sim.take().is_some() {
+            self.rebuild()?;
         }
-        if let Some(dt) = ov.dt {
-            cfg.dt = dt;
-        }
-        if let Some(t) = ov.tstop {
-            cfg.tstop = t;
-        }
+        let cfg = self.merged_cfg(ov)?;
         let model = self.model.take().ok_or_else(no_model)?;
         let mut sim = match Sim::new(model, cfg) {
             Ok(s) => s,
@@ -249,11 +302,43 @@ impl Session {
         };
         let traces = collect_traces(&mut model);
         self.model = Some(model);
-        let run = SimRun { t: out.t, x: out.x, steps: out.steps, solver: out.solver, dt: out.dt, tstop: cfg.tstop, traces };
+        let run = SimRun { t: out.t, x: out.x, steps: out.steps, rejected: out.rejected, solver: out.solver, dt: out.dt, tstop: cfg.tstop, traces };
         if let Some(m) = self.mat.as_mut() {
             publish(m, &run);
         }
         Ok(run)
+    }
+
+    /// `sim.step`: execute `count` major steps on a persistent stepping
+    /// sim (created lazily from the document's solver config plus `ov`
+    /// overrides — overrides apply only at creation). Sink logs accumulate
+    /// in the model as usual; the stepping sim survives until `sim.run`,
+    /// `block.set` or `model.load` discards it.
+    pub fn step(&mut self, ov: &RunOpts, count: u64) -> Result<StepInfo, SimError> {
+        if self.sim.is_none() {
+            let cfg = self.merged_cfg(ov)?;
+            let model = self.model.take().ok_or_else(no_model)?;
+            match Sim::new(model, cfg) {
+                Ok(s) => self.sim = Some(s),
+                Err(e) => {
+                    let _ = self.rebuild();
+                    return Err(e);
+                }
+            }
+        }
+        let sim = self.sim.as_mut().ok_or_else(no_model)?;
+        let mut steps_done = 0u64;
+        while steps_done < count && sim.step()? {
+            steps_done += 1;
+        }
+        Ok(StepInfo {
+            t: sim.time(),
+            steps_done,
+            accepted: sim.accepted(),
+            rejected: sim.rejected(),
+            finished: sim.finished(),
+            x: sim.state().to_vec(),
+        })
     }
 
     /// Run command `id` with JSON `params`. A panic drops the loaded model
@@ -267,6 +352,7 @@ impl Session {
             Err(_) => {
                 self.doc = None;
                 self.model = None;
+                self.sim = None;
                 self.mat = mat_snapshot;
                 Err(EngineError::Panic(id.to_string()))
             }
@@ -365,8 +451,8 @@ pub fn publish(lang: &mut matlang::Session, run: &SimRun) {
     lang.set("out", Value::Struct(matlang::interp::StructArray::from_map(out_map)));
 }
 
-/// The `sim.run` reply: `{ok, solver, dt, tstop, steps, t, out}` where
-/// `out` maps each trace name to `{t, y}` (`y` is sample-major rows).
+/// The `sim.run` reply: `{ok, solver, dt, tstop, steps, rejected, t, out}`
+/// where `out` maps each trace name to `{t, y}` (`y` is sample-major rows).
 pub fn run_json(run: &SimRun) -> Json {
     let out: serde_json::Map<String, Json> =
         run.traces.iter().map(|tr| (tr.name.clone(), serde_json::json!({"t": tr.trace.t, "y": tr.trace.y}))).collect();
@@ -376,8 +462,22 @@ pub fn run_json(run: &SimRun) -> Json {
         "dt": run.dt,
         "tstop": run.tstop,
         "steps": run.steps,
+        "rejected": run.rejected,
         "t": run.t,
         "out": Json::Object(out),
+    })
+}
+
+/// The `sim.step` reply.
+pub fn step_json(info: &StepInfo) -> Json {
+    serde_json::json!({
+        "ok": true,
+        "t": info.t,
+        "steps_done": info.steps_done,
+        "accepted": info.accepted,
+        "rejected": info.rejected,
+        "finished": info.finished,
+        "x": info.x,
     })
 }
 
@@ -389,7 +489,8 @@ pub fn check_json(info: &CheckInfo) -> Json {
         "wires": info.wires,
         "states": info.states,
         "steps": info.steps,
-        "solver": {"solver": info.solver.solver.name(), "dt": info.solver.dt, "tstop": info.solver.tstop},
+        "solver": {"solver": info.solver.solver.name(), "dt": info.solver.dt, "tstop": info.solver.tstop,
+                   "rtol": info.solver.rtol, "atol": info.solver.atol, "min_step": info.solver.min_step, "max_step": info.solver.max_step},
     })
 }
 

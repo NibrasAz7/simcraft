@@ -6,7 +6,7 @@ use serde_json::{json, Value as Json};
 
 use simcore::{Param, Params};
 
-use crate::{catalog_json, check_json, run_json, EngineError, RunOpts, Session};
+use crate::{catalog_json, check_json, run_json, step_json, EngineError, RunOpts, Session};
 
 /// A registered command.
 pub struct CommandSpec {
@@ -32,13 +32,17 @@ fn need_str<'a>(p: &'a Json, key: &str, cmd: &str) -> Result<&'a str, EngineErro
     p.get(key).and_then(Json::as_str).ok_or_else(|| EngineError::bad_params(cmd, format!("missing string `{key}`")))
 }
 
-/// `sim.run`'s `{solver?, dt?, tstop?}` overrides.
+/// `sim.run`/`sim.step`'s `{solver?, dt?, tstop?, rtol?, atol?,
+/// min_step?, max_step?}` overrides.
 fn run_opts(p: &Json, cmd: &str) -> Result<RunOpts, EngineError> {
     let solver = match p.get("solver") {
         None | Some(Json::Null) => None,
         Some(v) => {
             let name = v.as_str().ok_or_else(|| EngineError::bad_params(cmd, "`solver` must be a string"))?;
-            Some(simcore::Solver::parse(name).ok_or_else(|| EngineError::bad_params(cmd, format!("unknown solver `{name}` (have: euler, rk4)")))?)
+            Some(
+                simcore::Solver::parse(name)
+                    .ok_or_else(|| EngineError::bad_params(cmd, format!("unknown solver `{name}` (have: euler, rk4, rk45)")))?,
+            )
         }
     };
     let num = |key: &str| -> Result<Option<f64>, EngineError> {
@@ -47,7 +51,15 @@ fn run_opts(p: &Json, cmd: &str) -> Result<RunOpts, EngineError> {
             Some(v) => v.as_f64().map(Some).ok_or_else(|| EngineError::bad_params(cmd, format!("`{key}` must be a number"))),
         }
     };
-    Ok(RunOpts { solver, dt: num("dt")?, tstop: num("tstop")? })
+    Ok(RunOpts {
+        solver,
+        dt: num("dt")?,
+        tstop: num("tstop")?,
+        rtol: num("rtol")?,
+        atol: num("atol")?,
+        min_step: num("min_step")?,
+        max_step: num("max_step")?,
+    })
 }
 
 /// `Param` → JSON (`number | [numbers] | string | bool`).
@@ -135,6 +147,18 @@ fn sim_run(s: &mut Session, p: &Json) -> Result<Json, EngineError> {
     Ok(run_json(&s.run(&ov)?))
 }
 
+fn sim_step(s: &mut Session, p: &Json) -> Result<Json, EngineError> {
+    let ov = run_opts(p, "sim.step")?;
+    let n = match p.get("n") {
+        None | Some(Json::Null) => 1,
+        Some(v) => {
+            let n = v.as_u64().ok_or_else(|| EngineError::bad_params("sim.step", "`n` must be a positive integer"))?;
+            n.clamp(1, 1_000_000)
+        }
+    };
+    Ok(step_json(&s.step(&ov, n)?))
+}
+
 fn session_link(s: &mut Session, _p: &Json) -> Result<Json, EngineError> {
     s.link(matlang::Session::new());
     Ok(json!({"ok": true, "linked": true}))
@@ -161,8 +185,14 @@ static COMMANDS: &[CommandSpec] = &[
     CommandSpec {
         id: "sim.run",
         label: "Run the loaded model, collect sink traces",
-        params: "{solver?, dt?, tstop?} → {t, out:{name:{t,y}}}",
+        params: "{solver?, dt?, tstop?, rtol?, atol?, min_step?, max_step?} → {t, out:{name:{t,y}}}",
         run: sim_run,
+    },
+    CommandSpec {
+        id: "sim.step",
+        label: "Single-step the loaded model (debugging); solver opts apply at creation",
+        params: "{n?, solver?, dt?, tstop?, rtol?, atol?, min_step?, max_step?} → {t, steps_done, finished, x}",
+        run: sim_step,
     },
     CommandSpec { id: "session.link", label: "Attach a MatCraft workspace for to_workspace traces", params: "{}", run: session_link },
     CommandSpec { id: "session.unlink", label: "Detach the MatCraft workspace", params: "{}", run: session_unlink },
@@ -234,6 +264,70 @@ mod tests {
         // ~1 period of cos(√9.81·t): theta(10s) ≈ 0.2 again.
         let theta_var = mat.get("theta").unwrap();
         assert!(matches!(theta_var, matlang::Value::Struct(_)));
+    }
+
+    #[test]
+    fn rk45_run_collects_and_publishes_same_shape() {
+        let mut s = loaded();
+        s.execute("session.link", json!({})).unwrap();
+        let r = s.execute("sim.run", json!({"solver": "rk45", "rtol": 1e-6, "atol": 1e-8})).unwrap();
+        assert_eq!(r["ok"], json!(true));
+        assert_eq!(r["solver"], json!("rk45"));
+        let t = r["t"].as_array().unwrap();
+        assert!(t.len() > 2 && t.len() < 10001, "adaptive grid: {} points", t.len());
+        // Nonuniform grid: successive spacings differ.
+        let d = |i: usize| t[i + 1].as_f64().unwrap() - t[i].as_f64().unwrap();
+        assert!((d(0) - d(t.len() / 2)).abs() > 1e-9);
+        // Trace names/first samples identical to the fixed-step path.
+        assert_eq!(r["out"]["theta"]["y"][0][0], json!(0.2));
+        assert_eq!(r["out"]["angle_scope"]["y"][0][0], json!(0.2));
+        let mat = s.mat().unwrap();
+        assert!(mat.get("out").is_some() && mat.get("theta").is_some());
+    }
+
+    #[test]
+    fn sim_step_single_steps_then_run_resets() {
+        let mut s = loaded();
+        let r = s.execute("sim.step", json!({})).unwrap();
+        assert!((r["t"].as_f64().unwrap() - 0.001).abs() < 1e-12);
+        assert_eq!(r["finished"], json!(false));
+        let r = s.execute("sim.step", json!({"n": 9})).unwrap();
+        assert!((r["t"].as_f64().unwrap() - 0.01).abs() < 1e-9);
+        // Step to the end (n capped internally).
+        let r = s.execute("sim.step", json!({"n": 100000})).unwrap();
+        assert_eq!(r["finished"], json!(true));
+        // sim.run afterwards runs fresh from t=0 with full history.
+        let r = s.execute("sim.run", json!({})).unwrap();
+        assert_eq!(r["t"].as_array().unwrap().len(), 10001);
+        // And stepping after a run starts a fresh stepping sim.
+        let r = s.execute("sim.step", json!({"solver": "rk45"})).unwrap();
+        assert!(r["t"].as_f64().unwrap() > 0.0);
+    }
+
+    #[test]
+    fn rk45_lands_on_discrete_sample_hits() {
+        // unit_delay with Ts=0.37 — deliberately not a multiple of dt.
+        let doc = r#"{
+            "format": "simcraft", "version": 1,
+            "solver": {"solver": "rk45", "dt": 0.05, "tstop": 1.2, "rtol": 1e-6},
+            "blocks": [
+                {"path": "c", "type": "constant", "params": {"value": 3.0}},
+                {"path": "d", "type": "unit_delay", "params": {"sample_time": 0.37}},
+                {"path": "s", "type": "scope"}
+            ],
+            "wires": [{"from": "c/1", "to": "d/1"}, {"from": "d/1", "to": "s/1"}]
+        }"#;
+        let mut s = Session::new();
+        s.load_document(simmodel::Document::parse(doc).unwrap()).unwrap();
+        let r = s.execute("sim.run", json!({})).unwrap();
+        let t: Vec<f64> = r["out"]["s"]["t"].as_array().unwrap().iter().filter_map(Json::as_f64).collect();
+        // Every hit 0.37·k <= tstop appears exactly in the log.
+        for hit in [0.37, 0.74, 1.11] {
+            assert!(t.iter().any(|&x| (x - hit).abs() < 1e-12), "no log point at {hit}: {t:?}");
+        }
+        assert_eq!(t.last().copied(), Some(1.2));
+        // Held value is the sampled constant throughout.
+        assert!(r["out"]["s"]["y"].as_array().unwrap().iter().all(|row| row[0] == json!(3.0)));
     }
 
     #[test]

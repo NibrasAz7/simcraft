@@ -43,8 +43,9 @@ pub struct Diagram {
 pub const GROUPS: &[(&str, &[&str])] = &[
     ("Sources", &["constant", "step", "sine", "ramp", "clock"]),
     ("Sinks", &["scope", "to_workspace"]),
-    ("Math", &["gain", "sum", "product", "abs", "saturation", "switch"]),
-    ("Continuous", &["integrator", "derivative", "transfer_fcn"]),
+    ("Math", &["gain", "sum", "product", "abs", "saturation", "dead_zone", "switch"]),
+    ("Logic", &["relational", "logical_operator"]),
+    ("Continuous", &["integrator", "derivative", "transfer_fcn", "pid", "transport_delay"]),
     ("Discrete", &["unit_delay", "zero_order_hold"]),
     ("Routing", &["mux", "demux"]),
 ];
@@ -82,9 +83,26 @@ pub fn default_params(type_name: &str) -> Params {
         "product" => {
             p.insert("ops".into(), Param::Str("**".into()));
         }
-        "saturation" => {
+        "saturation" | "dead_zone" => {
             num("lower", -0.5);
             num("upper", 0.5);
+        }
+        "relational" => {
+            p.insert("op".into(), Param::Str("<=".into()));
+        }
+        "logical_operator" => {
+            num("inputs", 2.0);
+            p.insert("op".into(), Param::Str("and".into()));
+        }
+        "pid" => {
+            num("kp", 1.0);
+            num("ki", 0.0);
+            num("kd", 0.0);
+            num("n", 100.0);
+        }
+        "transport_delay" => {
+            num("delay", 1.0);
+            num("initial_output", 0.0);
         }
         "switch" => {
             num("threshold", 0.0);
@@ -240,7 +258,14 @@ impl Diagram {
         if let Some(c) = &self.comment {
             obj.insert("comment".into(), json!(c));
         }
-        obj.insert("solver".into(), json!({"solver": self.solver.solver.name(), "dt": self.solver.dt, "tstop": self.solver.tstop}));
+        obj.insert(
+            "solver".into(),
+            json!({
+                "solver": self.solver.solver.name(), "dt": self.solver.dt, "tstop": self.solver.tstop,
+                "rtol": self.solver.rtol, "atol": self.solver.atol,
+                "min_step": self.solver.min_step, "max_step": self.solver.max_step
+            }),
+        );
         let blocks: Vec<Json> = self
             .blocks
             .iter()

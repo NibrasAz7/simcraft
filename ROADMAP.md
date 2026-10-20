@@ -40,7 +40,10 @@ Each milestone ends green: `cargo xtask ci` + a demo model that proves the stage
 
 ### S4 — variable step + discrete rigor
 
-- `rk45` (Dormand–Prince) with rtol/atol, `min/max` step, stats
+- **`rk45` done**: Dormand–Prince 5(4) with rtol/atol error control,
+  `min_step`/`max_step` bounds, accepted/rejected stats; trial steps land
+  exactly on discrete sample hits and `tstop`. `sim.step` single-steps
+  for debugging.
 - Multirate discrete scheduler, sample-time propagation, inherited `-1` rates
 - Zero-crossing detection + event location (step edges, relays)
 - Algebraic-loop detection + optional Newton iteration

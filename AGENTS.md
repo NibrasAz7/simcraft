@@ -6,8 +6,9 @@ with MatCraft (`../matcraft`). Spec: [`README.md`](README.md); plan:
 [`ROADMAP.md`](ROADMAP.md). It will run natively on macOS, Windows and Linux,
 and on the web via WASM.
 
-Status: **planning** — no crates exist yet. This file is written ahead of the
-scaffold so the first commits start on the right conventions.
+Status: **working** — simcore/simblocks/simmodel/engine + simcraft-cli and
+simcraft-studio exist and pass `cargo test`. See `README.md` for the
+current feature set.
 
 ## Start every session here
 

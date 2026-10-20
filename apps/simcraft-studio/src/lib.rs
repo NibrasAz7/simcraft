@@ -370,7 +370,7 @@ impl StudioApp {
         egui::Grid::new("solver").num_columns(2).show(ui, |ui| {
             ui.label("solver");
             egui::ComboBox::from_id_salt("solver_kind").selected_text(self.diagram.solver.solver.name()).show_ui(ui, |ui| {
-                for s in [Solver::Euler, Solver::Rk4] {
+                for &s in Solver::ALL {
                     if ui.selectable_label(self.diagram.solver.solver == s, s.name()).clicked() {
                         self.diagram.solver.solver = s;
                         self.dirty = true;
@@ -378,7 +378,7 @@ impl StudioApp {
                 }
             });
             ui.end_row();
-            ui.label("dt");
+            ui.label(if self.diagram.solver.solver == Solver::Rk45 { "dt (initial)" } else { "dt" });
             if ui.add(egui::DragValue::new(&mut self.diagram.solver.dt).speed(0.0005).range(1e-6..=1e6)).changed() {
                 self.dirty = true;
             }
@@ -388,6 +388,28 @@ impl StudioApp {
                 self.dirty = true;
             }
             ui.end_row();
+            if self.diagram.solver.solver == Solver::Rk45 {
+                ui.label("rtol");
+                if ui.add(egui::DragValue::new(&mut self.diagram.solver.rtol).speed(0.0001).range(1e-12..=1.0)).changed() {
+                    self.dirty = true;
+                }
+                ui.end_row();
+                ui.label("atol");
+                if ui.add(egui::DragValue::new(&mut self.diagram.solver.atol).speed(0.000001).range(0.0..=1.0)).changed() {
+                    self.dirty = true;
+                }
+                ui.end_row();
+                ui.label("min step (0=auto)");
+                if ui.add(egui::DragValue::new(&mut self.diagram.solver.min_step).speed(0.00001).range(0.0..=1e6)).changed() {
+                    self.dirty = true;
+                }
+                ui.end_row();
+                ui.label("max step (0=auto)");
+                if ui.add(egui::DragValue::new(&mut self.diagram.solver.max_step).speed(0.01).range(0.0..=1e6)).changed() {
+                    self.dirty = true;
+                }
+                ui.end_row();
+            }
         });
         ui.add_space(8.0);
         ui.separator();

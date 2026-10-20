@@ -3,8 +3,9 @@
 //! A [`Model`] is a directed graph of [`Block`]s wired port-to-port. Ports are
 //! typed ([`SigMeta`]: element width × [`DType`]); widths and dtypes propagate
 //! at compile time so mismatches fail before `t = 0`, never mid-run.
-//! [`Sim`] drives the compiled model with a fixed-step solver (`euler`,
-//! `rk4`), evaluating outputs in topological order each step, firing discrete
+//! [`Sim`] drives the compiled model with a fixed-step (`euler`, `rk4`) or
+//! adaptive (`rk45`, Dormand–Prince with rtol/atol error control) solver,
+//! evaluating outputs in topological order each step, firing discrete
 //! `update`s on sample hits, and logging sinks once per major step.
 //!
 //! Dependency rule: `simcore` may depend on `matcore`/`matlang` but never on

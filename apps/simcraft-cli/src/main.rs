@@ -1,15 +1,47 @@
 //! simcraft-cli — run `.simcraft` models headless.
 //!
-//!   simcraft run model.simcraft            run, print every sink trace
-//!   simcraft check model.simcraft          validate only (compile, no run)
+//!   simcraft run model.simcraft [--solver rk45] [--dt 0.01] [--tstop 10]
+//!                               [--rtol 1e-4] [--atol 1e-6]
+//!                               [--min-step 0] [--max-step 0]
+//!                                      run, print every sink trace
+//!   simcraft check model.simcraft [same overrides]
+//!                                      validate only (compile, no run)
 //!   simcraft blocks                        list the block catalog
 
 use simblocks::{Scope, ToWorkspace};
-use simcore::Sim;
+use simcore::{Sim, SimConfig, SimError, Solver};
 use simmodel::Document;
 
 fn main() {
     std::process::exit(real_main());
+}
+
+/// `--flag value` overrides onto the document's solver config.
+fn apply_overrides(cfg: &mut SimConfig, args: &[String]) -> Result<(), SimError> {
+    let bad = |m: String| SimError::Msg(m);
+    let mut i = 0;
+    while i < args.len() {
+        let flag = args[i].as_str();
+        let val = args.get(i + 1).ok_or_else(|| bad(format!("{flag} needs a value")))?;
+        i += 2;
+        let num = |dst: &mut f64| -> Result<(), SimError> {
+            *dst = val.parse::<f64>().map_err(|_| bad(format!("{flag}: `{val}` is not a number")))?;
+            Ok(())
+        };
+        match flag {
+            "--solver" => {
+                cfg.solver = Solver::parse(val).ok_or_else(|| bad(format!("--solver: unknown solver `{val}` (have: euler, rk4, rk45)")))?;
+            }
+            "--dt" => num(&mut cfg.dt)?,
+            "--tstop" => num(&mut cfg.tstop)?,
+            "--rtol" => num(&mut cfg.rtol)?,
+            "--atol" => num(&mut cfg.atol)?,
+            "--min-step" => num(&mut cfg.min_step)?,
+            "--max-step" => num(&mut cfg.max_step)?,
+            other => return Err(bad(format!("unknown flag `{other}`"))),
+        }
+    }
+    Ok(())
 }
 
 fn real_main() -> i32 {
@@ -28,23 +60,28 @@ fn real_main() -> i32 {
                 Ok(d) => d,
                 Err(e) => return fail(&file, &e),
             };
+            let mut cfg = doc.solver;
+            let rest: Vec<String> = args.collect();
+            if let Err(e) = apply_overrides(&mut cfg, &rest) {
+                return fail(&file, &e);
+            }
             let model = match doc.to_model(&simblocks::Factory) {
                 Ok(m) => m,
                 Err(e) => return fail(&file, &e),
             };
-            let steps = (doc.solver.tstop / doc.solver.dt).round() as u64;
-            let mut sim = match Sim::new(model, doc.solver) {
+            let mut sim = match Sim::new(model, cfg) {
                 Ok(s) => s,
                 Err(e) => return fail(&file, &e),
             };
             if cmd == "check" {
-                println!("{file}: ok — {} block(s), {} state(s), {steps} steps", sim.model().len(), sim.state().len());
+                println!("{file}: ok — {} block(s), {} state(s)", sim.model().len(), sim.state().len());
                 return 0;
             }
-            if let Err(e) = sim.run() {
-                return fail(&file, &e);
-            }
-            println!("{file}: ran {steps} steps ({}, dt={})", doc.solver.solver.name(), doc.solver.dt);
+            let out = match sim.run() {
+                Ok(o) => o,
+                Err(e) => return fail(&file, &e),
+            };
+            println!("{file}: ran {} steps ({}, dt={}, {} rejected)", out.steps, out.solver.name(), out.dt, out.rejected);
             let model = sim.model();
             for name in model.block_names() {
                 if let Some(s) = model.block::<Scope>(name) {
@@ -69,7 +106,9 @@ fn real_main() -> i32 {
 }
 
 fn usage() {
-    eprintln!("usage: simcraft <run|check|blocks> [model.simcraft]");
+    eprintln!(
+        "usage: simcraft <run|check|blocks> [model.simcraft] [--solver s] [--dt h] [--tstop t] [--rtol r] [--atol a] [--min-step h] [--max-step h]"
+    );
 }
 
 fn fail(file: &str, e: &simcore::SimError) -> i32 {
@@ -91,5 +130,8 @@ fn print_trace(name: &str, tr: &simblocks::Trace) {
     println!("  {name}: {n} samples over [{first}, {last}], width {width}");
     for (t, v) in tr.t.iter().zip(&tr.y).step_by((n / 10).max(1)).take(10) {
         println!("    t={t:>9.4}  {:?}", v);
+    }
+    if let (Some(t), Some(v)) = (tr.t.last(), tr.y.last()) {
+        println!("    t={t:>9.4}  {:?}  (last)", v);
     }
 }

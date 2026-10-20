@@ -5,7 +5,8 @@
 //! {
 //!   "format": "simcraft",
 //!   "version": 1,
-//!   "solver": {"solver": "rk4", "dt": 0.001, "tstop": 10.0},
+//!   "solver": {"solver": "rk4", "dt": 0.001, "tstop": 10.0,
+//!              "rtol": 1e-3, "atol": 1e-6, "min_step": 0.0, "max_step": 0.0},
 //!   "blocks": [
 //!     {"path": "src", "type": "sine", "params": {"frequency": 2.0}},
 //!     {"path": "out", "type": "scope"}
@@ -93,13 +94,19 @@ impl Document {
         let mut solver = SimConfig::default();
         if let Some(s) = obj.get("solver").and_then(|s| s.as_object()) {
             if let Some(name) = s.get("solver").and_then(|x| x.as_str()) {
-                solver.solver = Solver::parse(name).ok_or_else(|| msg(format!("unknown solver `{name}` (have: euler, rk4)")))?;
+                solver.solver = Solver::parse(name).ok_or_else(|| msg(format!("unknown solver `{name}` (have: euler, rk4, rk45)")))?;
             }
-            if let Some(dt) = s.get("dt").and_then(|x| x.as_f64()) {
-                solver.dt = dt;
-            }
-            if let Some(t) = s.get("tstop").and_then(|x| x.as_f64()) {
-                solver.tstop = t;
+            for (key, dst) in [
+                ("dt", &mut solver.dt),
+                ("tstop", &mut solver.tstop),
+                ("rtol", &mut solver.rtol),
+                ("atol", &mut solver.atol),
+                ("min_step", &mut solver.min_step),
+                ("max_step", &mut solver.max_step),
+            ] {
+                if let Some(v) = s.get(key).and_then(|x| x.as_f64()) {
+                    *dst = v;
+                }
             }
         }
 

@@ -4,8 +4,8 @@
 use simcore::{Block, BlockFactory, Params, SimError};
 
 use crate::{
-    Abs, Clock, Constant, Demux, Derivative, Gain, Integrator, Mux, Product, Ramp, Saturation, Scope, Sine, Step, Sum, Switch, ToWorkspace,
-    TransferFcn, UnitDelay, ZeroOrderHold,
+    Abs, Clock, Constant, DeadZone, Demux, Derivative, Gain, Integrator, LogicalOperator, Mux, PidController, Product, Ramp, Relational, Saturation,
+    Scope, Sine, Step, Sum, Switch, ToWorkspace, TransferFcn, TransportDelay, UnitDelay, ZeroOrderHold,
 };
 
 /// One catalog row: document type name + what the palette shows.
@@ -28,10 +28,15 @@ const CATALOG: &[BlockInfo] = &[
     BlockInfo { type_name: "product", label: "Product" },
     BlockInfo { type_name: "abs", label: "Abs" },
     BlockInfo { type_name: "saturation", label: "Saturation" },
+    BlockInfo { type_name: "dead_zone", label: "Dead Zone" },
     BlockInfo { type_name: "switch", label: "Switch" },
+    BlockInfo { type_name: "relational", label: "Relational Operator" },
+    BlockInfo { type_name: "logical_operator", label: "Logical Operator" },
     BlockInfo { type_name: "integrator", label: "Integrator" },
     BlockInfo { type_name: "derivative", label: "Derivative" },
     BlockInfo { type_name: "transfer_fcn", label: "Transfer Fcn" },
+    BlockInfo { type_name: "pid", label: "PID Controller" },
+    BlockInfo { type_name: "transport_delay", label: "Transport Delay" },
     BlockInfo { type_name: "unit_delay", label: "Unit Delay" },
     BlockInfo { type_name: "zero_order_hold", label: "Zero-Order Hold" },
     BlockInfo { type_name: "mux", label: "Mux" },
@@ -61,10 +66,15 @@ impl BlockFactory for Factory {
             "product" => Box::new(Product::new(params).map_err(err)?),
             "abs" => Box::new(Abs::new(params).map_err(err)?),
             "saturation" => Box::new(Saturation::new(params).map_err(err)?),
+            "dead_zone" => Box::new(DeadZone::new(params).map_err(err)?),
             "switch" => Box::new(Switch::new(params).map_err(err)?),
+            "relational" => Box::new(Relational::new(params).map_err(err)?),
+            "logical_operator" => Box::new(LogicalOperator::new(params).map_err(err)?),
             "integrator" => Box::new(Integrator::new(params).map_err(err)?),
             "derivative" => Box::new(Derivative::new(params).map_err(err)?),
             "transfer_fcn" => Box::new(TransferFcn::new(params).map_err(err)?),
+            "pid" => Box::new(PidController::new(params).map_err(err)?),
+            "transport_delay" => Box::new(TransportDelay::new(params).map_err(err)?),
             "unit_delay" => Box::new(UnitDelay::new(params).map_err(err)?),
             "zero_order_hold" => Box::new(ZeroOrderHold::new(params).map_err(err)?),
             "mux" => Box::new(Mux::new(params).map_err(err)?),
