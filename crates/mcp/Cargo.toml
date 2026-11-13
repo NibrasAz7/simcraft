@@ -1,0 +1,13 @@
+[package]
+name = "simcraft_mcp"
+description = "SimCraft MCP server: JSON-RPC over stdio exposing the engine commands."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+simcraft_engine = { path = "../engine" }
+serde_json = "1"

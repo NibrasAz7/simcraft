@@ -24,7 +24,14 @@ Each milestone ends green: `cargo xtask ci` + a demo model that proves the stage
 - `engine` command registry (`model.*`, `block.*`, `wire.*`, `sim.run/pause/stop`)
 - Studio: library palette, canvas with drag/drop blocks + wires, inspector for params
 - Run/pause/step/stop in the ribbon; stop-time and solver fields
-- Control channel + MCP — `simcraft --control`, same protocol as MatCraft
+- **Control channel + MCP done (headless side)**: `simcraft-cli control PORT`
+  serves MatCraft's JSON-lines protocol (`engine.execute`, `engine.list`,
+  `ping`, `control.shutdown`, flat `{command, params}` shorthand) and
+  `simcraft-cli mcp` serves JSON-RPC stdio (`execute`, `sim_run`,
+  `model_load`, `list_commands` tools; `simcraft://model`/`simcraft://commands`
+  resources). Scope traces publish as matplot figures in the linked
+  MatCraft session (`figure.list`). Studio-side `ui.*` methods land with
+  the Studio control channel.
 - **Done when**: build a two-integrator system entirely in the GUI, run it, watch the
   scope draw live; `ui.screenshot` + `engine.execute` drive it remotely.
 

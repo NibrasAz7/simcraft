@@ -3022,8 +3022,11 @@ version = "0.1.0"
 name = "simcraft-cli"
 version = "0.1.0"
 dependencies = [
+ "serde_json",
  "simblocks",
  "simcore",
+ "simcraft_engine",
+ "simcraft_mcp",
  "simmodel",
 ]
 
@@ -3051,6 +3054,14 @@ dependencies = [
  "simblocks",
  "simcore",
  "simmodel",
+]
+
+[[package]]
+name = "simcraft_mcp"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "simcraft_engine",
 ]
 
 [[package]]

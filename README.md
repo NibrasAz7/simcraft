@@ -11,8 +11,10 @@ fixed-step + adaptive `rk45` Dormand–Prince solver), `simblocks` (25
 blocks: sources, sinks, math, logic, continuous, discrete, routing),
 `simmodel` (`.simcraft` JSON), `simcraft_engine` (command session +
 MatCraft bridge: `model.*`, `block.*`, `sim.run`/`sim.step`, to-workspace
-publish), `simcraft-cli` (`run`/`check`/`blocks` + solver overrides) and
-Studio (egui palette/canvas/inspector, run + trace chart). `cargo run -p
+publish, `figure.list` scope figures), `simcraft_mcp` (MCP server on
+stdio), `simcraft-cli` (`run`/`check`/`blocks` + solver overrides,
+`control PORT` TCP control channel, `mcp`) and Studio (egui
+palette/canvas/inspector, run + trace chart). `cargo run -p
 simcraft-cli -- run examples/pendulum.simcraft` simulates a linearized
 pendulum. Not yet: multirate/zero-crossing rigor, subsystems, M-function
 blocks, WASM.
@@ -169,12 +171,15 @@ system as MatCraft Studio.
 
 ### Automation
 
-Everything is a command. `simcraft --control 7979` serves the same JSON-lines
-protocol as MatCraft (`engine.execute`, `ui.screenshot`, `ui.render`,
-`model.*`). `simcraft-cli` runs headless (`sim`, `check`, `export`),
-`simcraft mcp` exposes the model to agents, and MatCraft's `eval.line` can
-call `sim(...)` — a sweep script in MatCraft driving SimCraft is the
-canonical demo.
+Everything is a command. `simcraft-cli control 7979` serves the same
+JSON-lines TCP protocol as MatCraft (`engine.execute`/`command`,
+`engine.list`/`commands`, `ping`, plus the flat `{id, command, params}`
+shorthand; `ui.*` methods arrive with the Studio). `simcraft-cli mcp`
+exposes the engine over stdio JSON-RPC (`execute` reaches every command,
+`sim_run`/`model_load` conveniences, `simcraft://model` and
+`simcraft://commands` resources). `simcraft-cli` also runs headless
+(`run`, `check`), and MatCraft's `eval.line` can call `sim(...)` — a
+sweep script in MatCraft driving SimCraft is the canonical demo.
 
 ## License
 

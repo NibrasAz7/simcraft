@@ -173,6 +173,33 @@ fn session_status(s: &mut Session, _p: &Json) -> Result<Json, EngineError> {
     Ok(json!({"loaded": s.loaded(), "linked": s.mat().is_some()}))
 }
 
+/// `figure.list` — the scope figures a `sim.run` drew into the linked
+/// MatCraft session. Per series: its matplot kind plus the legend name
+/// (the scope's block path). No linked session → `{count: 0}`.
+fn figure_list(s: &mut Session, _p: &Json) -> Result<Json, EngineError> {
+    let (figs, current) = match s.mat() {
+        Some(m) => (
+            m.figures()
+                .iter()
+                .enumerate()
+                .map(|(i, f)| {
+                    json!({
+                        "n": i + 1,
+                        "title": f.title,
+                        "series": f.series.iter().enumerate().map(|(j, sr)| json!({
+                            "kind": format!("{:?}", sr.kind),
+                            "name": f.legend.get(j),
+                        })).collect::<Vec<_>>(),
+                    })
+                })
+                .collect::<Vec<_>>(),
+            m.current_figure(),
+        ),
+        None => (Vec::new(), 0),
+    };
+    Ok(json!({"count": figs.len(), "current": current, "figs": figs}))
+}
+
 static COMMANDS: &[CommandSpec] = &[
     CommandSpec { id: "engine.version", label: "App name and version", params: "{}", run: engine_version },
     CommandSpec { id: "engine.list", label: "List every command", params: "{}", run: engine_list },
@@ -194,9 +221,20 @@ static COMMANDS: &[CommandSpec] = &[
         params: "{n?, solver?, dt?, tstop?, rtol?, atol?, min_step?, max_step?} → {t, steps_done, finished, x}",
         run: sim_step,
     },
-    CommandSpec { id: "session.link", label: "Attach a MatCraft workspace for to_workspace traces", params: "{}", run: session_link },
+    CommandSpec {
+        id: "session.link",
+        label: "Attach a MatCraft workspace for to_workspace traces and scope figures",
+        params: "{}",
+        run: session_link,
+    },
     CommandSpec { id: "session.unlink", label: "Detach the MatCraft workspace", params: "{}", run: session_unlink },
     CommandSpec { id: "session.status", label: "Loaded-model and link state", params: "{}", run: session_status },
+    CommandSpec {
+        id: "figure.list",
+        label: "List scope figures in the linked MatCraft session",
+        params: "{} → {count,current,figs}",
+        run: figure_list,
+    },
 ];
 
 #[cfg(test)]
@@ -264,6 +302,33 @@ mod tests {
         // ~1 period of cos(√9.81·t): theta(10s) ≈ 0.2 again.
         let theta_var = mat.get("theta").unwrap();
         assert!(matches!(theta_var, matlang::Value::Struct(_)));
+    }
+
+    #[test]
+    fn scope_trace_draws_a_matplot_figure() {
+        let mut s = loaded();
+        // No linked session yet: figure.list is empty, not an error.
+        assert_eq!(s.execute("figure.list", json!({})).unwrap()["count"], json!(0));
+        s.execute("session.link", json!({})).unwrap();
+        s.execute("sim.run", json!({"tstop": 0.5})).unwrap();
+        let r = s.execute("figure.list", json!({})).unwrap();
+        assert_eq!(r["count"], json!(1));
+        let fig = &r["figs"][0];
+        assert_eq!(fig["title"], json!("angle_scope"));
+        assert_eq!(fig["series"][0]["kind"], json!("Line"));
+        assert_eq!(fig["series"][0]["name"], json!("angle_scope"));
+        // The figure is a real matplot figure: same data as the trace.
+        {
+            let mat = s.mat().unwrap();
+            let ser = &mat.figures()[0].series[0];
+            assert_eq!(ser.x.len(), 501);
+            assert_eq!(ser.y[0], 0.2);
+            // And the temp vars used to stage the data are gone.
+            assert!(mat.get("__simcraft_scope_t").is_none());
+        }
+        // Re-running refreshes the same figure — scopes don't multiply.
+        s.execute("sim.run", json!({"tstop": 0.5})).unwrap();
+        assert_eq!(s.execute("figure.list", json!({})).unwrap()["count"], json!(1));
     }
 
     #[test]

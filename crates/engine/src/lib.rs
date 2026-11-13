@@ -7,8 +7,9 @@
 //!
 //! A [`Session`] owns one loaded `.simcraft` model plus an optional linked
 //! `matlang::Session`: after `sim.run`, every `to_workspace` block's trace
-//! lands in that workspace as a `{t, y}` struct and the run summary as the
-//! `out` struct — `plot(out.t, out.y)` then just works.
+//! lands in that workspace as a `{t, y}` struct, the run summary as the
+//! `out` struct — `plot(out.t, out.y)` then just works — and every `scope`
+//! block's trace draws as a matplot figure (`figure.list`).
 #![forbid(unsafe_code)]
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
@@ -431,6 +432,9 @@ fn field_name(s: &str) -> Option<String> {
 ///   `out.theta(1:10)` indexes straight into the data).
 /// * `<var>` — each `to_workspace` block's `{t, y}` struct, bound under its
 ///   `var` name (MATLAB-style To Workspace semantics).
+/// * a matplot figure per `scope` block — "a Scope block is a matplot
+///   Figure" (AGENTS.md): the trace becomes `Line` series, figure title
+///   and legend name the block path, and re-runs refresh the same figure.
 pub fn publish(lang: &mut matlang::Session, run: &SimRun) {
     let mut out_map: BTreeMap<String, Value> = BTreeMap::new();
     out_map.insert("t".to_string(), t_value(&run.t));
@@ -449,6 +453,36 @@ pub fn publish(lang: &mut matlang::Session, run: &SimRun) {
         }
     }
     lang.set("out", Value::Struct(matlang::interp::StructArray::from_map(out_map)));
+    for tr in &run.traces {
+        if !tr.to_workspace {
+            scope_figure(lang, &tr.name, &tr.trace);
+        }
+    }
+}
+
+/// Draw one scope trace as a matplot figure in `lang` — driven through
+/// M-code (`figure`/`plot`/`title`/`legend`) so the figure is
+/// indistinguishable from a hand-plotted one: `figure.list`, `close`,
+/// `print` all see it. The figure with this scope's title is reused on
+/// re-runs (a Scope window refreshes, it doesn't multiply). Figure
+/// drawing is best-effort — a plotting hiccup never fails `sim.run`.
+fn scope_figure(lang: &mut matlang::Session, name: &str, trace: &Trace) {
+    const T: &str = "__simcraft_scope_t";
+    const Y: &str = "__simcraft_scope_y";
+    lang.set(T, t_value(&trace.t));
+    lang.set(Y, y_value(trace));
+    // M-code string literal: `'` doubles, control chars can't appear.
+    let title = name.replace('\'', "''").replace(['\r', '\n'], " ");
+    let open = match lang.figures().iter().position(|f| f.title.as_deref() == Some(name)) {
+        Some(i) => format!("figure({}); clf;", i + 1),
+        None => "figure;".to_string(),
+    };
+    // One series per signal column; `plot(x, y)` fans a wide `y` out
+    // itself, the legend names each column after the scope.
+    let width = trace.y.first().map(|r| r.len()).unwrap_or(0).max(1);
+    let legend = (1..=width).map(|k| if width == 1 { format!("'{title}'") } else { format!("'{title}_{k}'") }).collect::<Vec<_>>().join(", ");
+    let _ = lang.run(&format!("{open} plot({T}, {Y}); title('{title}'); xlabel('t'); legend({legend})"));
+    lang.clear_vars(&[T.to_string(), Y.to_string()]);
 }
 
 /// The `sim.run` reply: `{ok, solver, dt, tstop, steps, rejected, t, out}`

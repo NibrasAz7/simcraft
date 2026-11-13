@@ -7,6 +7,11 @@
 //!   simcraft check model.simcraft [same overrides]
 //!                                      validate only (compile, no run)
 //!   simcraft blocks                        list the block catalog
+//!   simcraft control PORT                  JSON-lines TCP control channel
+//!                                          (same protocol as MatCraft's)
+//!   simcraft mcp                           MCP server on stdio
+
+mod control;
 
 use simblocks::{Scope, ToWorkspace};
 use simcore::{Sim, SimConfig, SimError, Solver};
@@ -98,6 +103,31 @@ fn real_main() -> i32 {
             }
             0
         }
+        "control" | "--control" => {
+            let Some(arg) = args.next() else {
+                usage();
+                return 2;
+            };
+            match arg.parse::<u16>() {
+                Ok(port) => control::serve(port),
+                Err(_) => {
+                    eprintln!("control: `{arg}` is not a port number");
+                    2
+                }
+            }
+        }
+        "mcp" => {
+            let stdin = std::io::stdin();
+            let stdout = std::io::stdout();
+            let mut server = simcraft_mcp::Server::new();
+            match server.serve(stdin.lock(), stdout.lock()) {
+                Ok(()) => 0,
+                Err(e) => {
+                    eprintln!("mcp: {e}");
+                    1
+                }
+            }
+        }
         _ => {
             usage();
             2
@@ -107,7 +137,7 @@ fn real_main() -> i32 {
 
 fn usage() {
     eprintln!(
-        "usage: simcraft <run|check|blocks> [model.simcraft] [--solver s] [--dt h] [--tstop t] [--rtol r] [--atol a] [--min-step h] [--max-step h]"
+        "usage: simcraft <run|check|blocks|control|mcp> [model.simcraft|PORT] [--solver s] [--dt h] [--tstop t] [--rtol r] [--atol a] [--min-step h] [--max-step h]"
     );
 }
 
