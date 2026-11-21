@@ -82,18 +82,21 @@ The ArtCraft name and logos in `docs/brand/` are trademarks of the ArtCraft Team
 <td width="33%" valign="top">
 
 ### Real simulation
+
 Typed directed graphs, continuous + discrete states, fixed-step `euler`/`rk4` and adaptive `rk45` Dormand–Prince with error control — signals validated before `t=0`, never mid-run.
 
 </td>
 <td width="33%" valign="top">
 
 ### MatCraft underneath
+
 One linked M-code session is the model's compute context: callbacks, parameter sweeps, From/To Workspace — `out = sim('pendulum.simcraft')` returns a struct you can `plot` immediately.
 
 </td>
 <td width="33%" valign="top">
 
 ### Everything is a command
+
 Every UI action is a command id reachable from the headless CLI, the TCP control channel and MCP — automation-first, no account, no telemetry.
 
 </td>
