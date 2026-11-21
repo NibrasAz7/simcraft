@@ -105,15 +105,15 @@ workspace.
 
 ### Shared infrastructure, nothing duplicated
 
-| Concern | Shared from |
-| --- | --- |
-| Matrices, linalg | `matcore` (`Matrix`, `CMatrix`, `SparseMat`) |
-| Values, M-code | `matlang` (`Session`, `Value`) |
-| Scopes, plots | `matplot` (a Scope block is a streaming `Figure`) |
-| Command registry | `engine` conventions (`sim.run`, `model.set_param`, …) |
-| Automation | `mcp` protocol + TCP control channel, same JSON-lines framing |
-| File exchange | `.mat` v5 (load/save for logged data), `.simcraft` model files |
-| UI chrome | `ui-egui` patterns: docked panes, ribbon, control server, themes |
+| Concern          | Shared from                                                      |
+| ---------------- | ---------------------------------------------------------------- |
+| Matrices, linalg | `matcore` (`Matrix`, `CMatrix`, `SparseMat`)                     |
+| Values, M-code   | `matlang` (`Session`, `Value`)                                   |
+| Scopes, plots    | `matplot` (a Scope block is a streaming `Figure`)                |
+| Command registry | `engine` conventions (`sim.run`, `model.set_param`, …)           |
+| Automation       | `mcp` protocol + TCP control channel, same JSON-lines framing    |
+| File exchange    | `.mat` v5 (load/save for logged data), `.simcraft` model files   |
+| UI chrome        | `ui-egui` patterns: docked panes, ribbon, control server, themes |
 
 SimCraft Studio ships with a MatCraft console pane — `who`, `plot(out.t,
 out.y)`, script files driving parameter sweeps — no second language to
