@@ -26,6 +26,7 @@
   <img alt="Written in Rust" src="https://img.shields.io/badge/written%20in-Rust-148a7a?style=flat-square&logo=rust&logoColor=white">
   <img alt="Runs on macOS, Windows, Linux and the web" src="https://img.shields.io/badge/runs%20on-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux%20%C2%B7%20web-0d4a54?style=flat-square">
   <img alt="Agent-drivable over MCP" src="https://img.shields.io/badge/agents-MCP%20%C2%B7%20control-148a7a?style=flat-square">
+  <img alt="Status: early development" src="https://img.shields.io/badge/status-early%20development-orange?style=flat-square">
   <br>
   <a href="https://remade.wiki/projects/simcraft/"><img alt="Listed on Remade" src="https://remade.wiki/badges/listed-on-remade.svg"></a>
 </p>
@@ -53,10 +54,10 @@
 > games &mdash; if you make things, you're one of us. **[Come say hi on Discord](https://discord.gg/artcraft).**
 
 <p align="center">
+  <a href="#quick-start">Quick start</a> ·
   <a href="#highlights">Highlights</a> ·
   <a href="#why-it-exists">Why</a> ·
   <a href="#the-matcraft-interconnection">MatCraft</a> ·
-  <a href="#quick-start">Quick start</a> ·
   <a href="#inside">Inside</a> ·
   <a href="#whats-next">What's next</a> ·
   <a href="#the-crafting-apps">The Crafting Apps</a> ·
@@ -74,6 +75,16 @@ SimCraft is part of [ArtCraft](https://getartcraft.com). Come say hello, get hel
 - **The workspace it lives in:** [github.com/NibrasAz7/matcraft](https://github.com/NibrasAz7/matcraft)
 
 The ArtCraft name and logos in `docs/brand/` are trademarks of the ArtCraft Team and are not open source. They may be used only unmodified, and only as part of SimCraft (see `docs/brand/LICENSE-brand.txt`). Forks and modified versions must remove them.
+
+## Quick start
+
+```console
+cargo run -p simcraft-cli -- run examples/pendulum.simcraft   # simulate a model headless
+#   ran 10000 steps (rk4, dt=0.001) · angle_scope: 10001 samples over [0, 10]
+cargo run -p simcraft-cli -- control 7979                    # JSON-lines TCP channel
+cargo run -p simcraft-cli -- mcp                             # MCP server on stdio
+cargo run -p simcraft-studio                                 # the diagram editor
+```
 
 ## Highlights
 
@@ -139,15 +150,6 @@ add_line('pendulum', 'w1/1', 'Gain/1')            % wire it
 | File exchange    | `.mat` v5 (load/save for logged data), `.simcraft` model files   |
 | UI chrome        | `ui-egui` patterns: docked panes, ribbon, control server, themes |
 
-## Quick start
-
-```console
-simcraft-cli run examples/pendulum.simcraft        # simulate a model headless
-simcraft-cli control 7979                          # JSON-lines TCP channel
-simcraft-cli mcp                                   # MCP server on stdio
-cargo run -p simcraft-studio                       # the diagram editor
-```
-
 ## Inside
 
 ```text
@@ -158,7 +160,7 @@ engine    (L5) command registry: sim.run, model.*, block.*, wire.*, scope.*
 ui-egui   (L6) diagram canvas, palette, scope panes, console (matlang)
 mcp       (L6) MCP server for agents
 apps/simcraft       desktop Studio (eframe)
-apps/simcraft-cli   headless run/export: simcraft-cli run model.simcraft
+apps/simcraft-cli   headless run/export: simcraft run model.simcraft
 ```
 
 - **simcore** — typed ports (`double`, `complex`, integer widths, `bool`), topological execution each step, algebraic-loop detection (error or Newton iterate), flat `x` vector owned by the solver, multirate `Ts` scheduling, zero-crossing bracketing.
