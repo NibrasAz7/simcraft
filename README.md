@@ -37,6 +37,7 @@
   <a href="#the-matcraft-interconnection">MatCraft</a> ·
   <a href="#inside">Inside</a> ·
   <a href="#whats-next">What's next</a> ·
+  <a href="#faq">FAQ</a> ·
   <a href="#sibling-projects">Siblings</a> ·
   <a href="#license">License</a>
 </p>
@@ -94,7 +95,7 @@ Every UI action is a command id reachable from the headless CLI, the TCP control
 
 There is no open-source Simulink-class tool. Octave covers the language side (GPL); the modeling/simulation side has nothing a student or indie developer can reach without a MathWorks license. SimCraft fills that gap — a dynamic-systems modeler with the same MIT/Apache licensing, the same automation-first design, and the same "everything is a command" architecture as its sibling apps.
 
-**Status:** `cargo test` green — `simcore` graph/solver, 25 blocks, `.simcraft` JSON models, engine + MCP + Studio. Honest scope: genuinely useful educational and indie simulation — pendulums, control loops, filters, discrete controllers. Not first-release goals: full Simulink parity, state machines, masked libraries, code generation, hardware-in-the-loop.
+**Status:** `cargo test` green — `simcore` graph/solver, 25 blocks, `.simcraft` JSON models, engine + MCP + Studio. Honest scope: Simulink-compatible-in-spirit block-diagram simulation for teaching and indie control work — pendulums, control loops, filters, discrete controllers — not a certified code-generation tool (see the [FAQ](#faq)). Not first-release goals: full Simulink parity, state machines, masked libraries, code generation, hardware-in-the-loop.
 
 ## The MatCraft interconnection
 
@@ -145,6 +146,12 @@ apps/simcraft-cli   headless run/export: simcraft run model.simcraft
 ## What's next
 
 `ROADMAP.md` tracks milestones — multirate/zero-crossing rigor, subsystems, M-function blocks, WASM, stiff solvers (`ode15s`-style BDF), S-function API.
+
+## FAQ
+
+**Is SimCraft a certified code-generation tool?**
+
+No — and it doesn't need to be. Simulink's moat is its pre-qualified code-generation toolchains (ISO 26262, DO-178C); replicating that certification is out of scope for an open-source project. But a free `.slx`-compatible editor and simulator needs no certification at all: you design and simulate in SimCraft, then open the model in Simulink for the certified codegen step. The missing free tool was never the codegen — it is the modeling and simulation in front of it. `.slx` import/export is a long-term aspiration; the native format is diff-friendly `.simcraft` JSON.
 
 ## Sibling projects
 

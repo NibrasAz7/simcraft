@@ -83,6 +83,9 @@ Stateflow-class state machines, masked subsystem authoring UI, C codegen for
 embedded targets, hardware-in-the-loop, fixed-point designer, Simscape-class
 physical domains, the thousands-block library breadth.
 
+Priority signal (community demand): block-editor UX → standard block library →
+ODE solvers → only then codegen-adjacent work.
+
 ## Conventions
 
 Same as the family: MIT OR Apache-2.0 · clean-room (public docs only, no
